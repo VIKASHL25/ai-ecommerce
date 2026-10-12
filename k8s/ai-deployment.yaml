@@ -1,0 +1,217 @@
+# ── AI Chatbot ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-chatbot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-chatbot
+  template:
+    metadata:
+      labels:
+        app: ai-chatbot
+    spec:
+      containers:
+      - name: ai-chatbot
+        image: vikashl10/ecom-chatbot:latest
+        ports:
+        - containerPort: 8004
+        env:
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: GROQ_API_KEY
+        - name: GROQ_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: GROQ_MODEL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: JWT_SECRET
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8004
+          initialDelaySeconds: 20
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot-service
+spec:
+  selector:
+    app: ai-chatbot
+  ports:
+  - port: 8004
+    targetPort: 8004
+---
+# ── AI Recommend ─────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-recommend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-recommend
+  template:
+    metadata:
+      labels:
+        app: ai-recommend
+    spec:
+      containers:
+      - name: ai-recommend
+        image: vikashl10/ecom-recommend:latest
+        ports:
+        - containerPort: 8005
+        env:
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: GROQ_API_KEY
+        - name: GROQ_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: GROQ_MODEL
+        - name: MONGO_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_HOST
+        - name: MONGO_USER
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_USER
+        - name: MONGO_DB
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_DB
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: MONGO_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: JWT_SECRET
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8005
+          initialDelaySeconds: 40
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommend-service
+spec:
+  selector:
+    app: ai-recommend
+  ports:
+  - port: 8005
+    targetPort: 8005
+---
+# ── AI Search ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-search
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-search
+  template:
+    metadata:
+      labels:
+        app: ai-search
+    spec:
+      containers:
+      - name: ai-search
+        image: vikashl10/ecom-search:latest
+        ports:
+        - containerPort: 8006
+        env:
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: GROQ_API_KEY
+        - name: GROQ_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: GROQ_MODEL
+        - name: MONGO_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_HOST
+        - name: MONGO_USER
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_USER
+        - name: MONGO_DB
+          valueFrom:
+            configMapKeyRef:
+              name: ecom-config
+              key: MONGO_DB
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ecom-secret
+              key: MONGO_PASSWORD
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8006
+          initialDelaySeconds: 40
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-service
+spec:
+  selector:
+    app: ai-search
+  ports:
+  - port: 8006
+    targetPort: 8006

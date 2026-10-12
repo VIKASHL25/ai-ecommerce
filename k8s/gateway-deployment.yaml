@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-gateway-config
+data:
+  nginx.conf: |
+    events {
+      worker_connections 4096;
+      multi_accept on;
+    }
+    http {
+      sendfile on;
+      tcp_nopush on;
+      tcp_nodelay on;
+      client_max_body_size 25M;
+
+      gzip on;
+      gzip_vary on;
+      gzip_proxied any;
+      gzip_comp_level 6;
+      gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
+
+      upstream auth_service      { server auth-service:8001; keepalive 32; }
+      upstream products_service  { server products-service:8002; keepalive 32; }
+      upstream orders_service    { server orders-service:8003; keepalive 32; }
+      upstream chatbot_service   { server chatbot-service:8004; keepalive 16; }
+      upstream recommend_service { server recommend-service:8005; keepalive 16; }
+      upstream search_service    { server search-service:8006; keepalive 16; }
+      upstream frontend_service  { server frontend-service:80; keepalive 32; }
+
+      server {
+        listen 80;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+
+        location /api/auth/      { proxy_pass http://auth_service/; }
+        location /api/products/  { proxy_pass http://products_service/; }
+        location /api/orders/    { proxy_pass http://orders_service/; }
+        location /api/chat/      { proxy_pass http://chatbot_service/; }
+        location /api/recommend/ { proxy_pass http://recommend_service/; }
+        location /api/search/    { proxy_pass http://search_service/; }
+        location /               { proxy_pass http://frontend_service; }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+      - name: gateway
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "300m"
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+spec:
+  selector:
+    app: gateway
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080

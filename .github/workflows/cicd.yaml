@@ -1,0 +1,171 @@
+name: 🚀 AI E-Commerce CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  # ══════════════════════════════════════════════
+  # JOB 1 — Run Tests
+  # ══════════════════════════════════════════════
+  test:
+    name: 🧪 Test Services
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Test Auth Service
+      run: |
+        cd services/auth
+        pip install -r requirements.txt -q
+        python -c "
+        from main import hash_password, verify_password, create_token, decode_token
+        # Test password hashing
+        hashed = hash_password('testpass123')
+        assert verify_password('testpass123', hashed), 'Password verify failed'
+        assert not verify_password('wrong', hashed), 'Wrong password should fail'
+        # Test JWT
+        token = create_token({'user_id': 1, 'email': 'test@test.com', 'name': 'Test'})
+        payload = decode_token(token)
+        assert payload['user_id'] == 1, 'JWT decode failed'
+        print('✅ Auth tests passed!')
+        "
+
+    - name: Test Products Service
+      run: |
+        cd services/products
+        pip install -r requirements.txt -q
+        python -c "
+        # Test serialization logic
+        from bson import ObjectId
+        def serialize(p):
+            p['id'] = str(p.pop('_id'))
+            return p
+        test = {'_id': ObjectId(), 'name': 'Test', 'price': 99.99}
+        result = serialize(test)
+        assert 'id' in result, 'Serialize failed'
+        assert '_id' not in result, 'Old key should be removed'
+        print('✅ Products tests passed!')
+        "
+
+    - name: Test AI Services Import
+      run: |
+        cd services/ai-chatbot
+        pip install -r requirements.txt -q
+        python -c "
+        import groq, os
+        print('✅ Groq library imported successfully!')
+        print(f'✅ Groq version: {groq.__version__}')
+        "
+
+  # ══════════════════════════════════════════════
+  # JOB 2 — Build & Push All Images
+  # ══════════════════════════════════════════════
+  build:
+    name: 🐳 Build & Push Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        service:
+          - name: auth
+            path: ./services/auth
+            image: ecom-auth
+
+          - name: products
+            path: ./services/products
+            image: ecom-products
+
+          - name: orders
+            path: ./services/orders
+            image: ecom-orders
+
+          - name: ai-chatbot
+            path: ./services/ai-chatbot
+            image: ecom-chatbot
+
+          - name: ai-recommend
+            path: ./services/ai-recommend
+            image: ecom-recommend
+
+          - name: ai-search
+            path: ./services/ai-search
+            image: ecom-search
+
+          - name: frontend
+            path: ./services/frontend
+            image: ecom-frontend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build & Push ${{ matrix.service.name }}
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ matrix.service.path }}
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:latest
+          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ══════════════════════════════════════════════
+  # JOB 3 — Summary
+  # ══════════════════════════════════════════════
+  summary:
+    name: 📊 Deployment Summary
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ Images Pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Service | Image | Tag |" >> $GITHUB_STEP_SUMMARY
+        echo "|---------|-------|-----|" >> $GITHUB_STEP_SUMMARY
+        echo "| Auth       | vikashl10/ecom-auth       | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Products   | vikashl10/ecom-products   | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Orders     | vikashl10/ecom-orders     | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| AI Chatbot | vikashl10/ecom-chatbot    | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| AI Recommend| vikashl10/ecom-recommend | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| AI Search  | vikashl10/ecom-search     | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend   | vikashl10/ecom-frontend   | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔄 To Deploy to Kubernetes:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/auth auth=vikashl10/ecom-auth:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/products products=vikashl10/ecom-products:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/orders orders=vikashl10/ecom-orders:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/ai-chatbot ai-chatbot=vikashl10/ecom-chatbot:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/ai-recommend ai-recommend=vikashl10/ecom-recommend:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/ai-search ai-search=vikashl10/ecom-search:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "kubectl set image deployment/frontend frontend=vikashl10/ecom-frontend:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

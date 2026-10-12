@@ -1,0 +1,50 @@
+# ── Kubernetes PodDisruptionBudgets (PDB) for High Availability ──
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: products-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: products
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orders-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: orders
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: auth
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
